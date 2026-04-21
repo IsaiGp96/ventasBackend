@@ -1,1 +1,2 @@
-[!NOTE] Proyecto de diseño de MVP para sistema de gestión de inventarios básico.
+[!NOTE] 
+Proyecto de diseño de MVP para sistema de gestión de inventarios básico.
