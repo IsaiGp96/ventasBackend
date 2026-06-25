@@ -135,16 +135,16 @@ public class OrdenCompraService {
         BigDecimal flete = request.getFlete() != null ? request.getFlete() : BigDecimal.ZERO;
         BigDecimal costoPorPieza = calcularCostoPorPieza(esLote, request, flete);
 
-        // ← DELETE nativo garantiza que los registros se eliminan de BD inmediatamente
-        // Después del DELETE nativo y antes del save
+        // DELETE nativo garantiza que los registros se eliminan de BD inmediatamente
         entityManager.createNativeQuery(
-                "DELETE FROM detalle_orden_compra WHERE id_orden_compra = :idOrden").setParameter("idOrden", id)
+                "DELETE FROM detalle_orden_compra WHERE id_orden_compra = :idOrden")
+                .setParameter("idOrden", id)
                 .executeUpdate();
 
         entityManager.flush();
         entityManager.clear();
 
-        // ← Recargar la orden limpia desde BD (sin los detalles eliminados)
+        // Recargar la orden limpia desde BD (sin los detalles eliminados)
         orden = ordenCompraRepository.findById(id)
                 .orElseThrow(() -> new IllegalArgumentException("Orden no encontrada"));
 
@@ -177,22 +177,17 @@ public class OrdenCompraService {
         for (DetalleOrdenCompra detalle : orden.getDetalles()) {
             ProductoVariante variante = detalle.getVariante();
             BigDecimal costo = detalle.getCostoUnitario();
-            if (costo == null)
-                continue;
+            if (costo == null) continue;
 
             variante.setPrecioCompra(costo);
 
-            // Usar pct_margen y pct_comision de la variante
-            BigDecimal pctMargen = variante.getPctMargen() != null
-                    ? variante.getPctMargen()
-                    : new BigDecimal("30");
+            BigDecimal pctMargen   = variante.getPctMargen() != null
+                    ? variante.getPctMargen() : new BigDecimal("30");
             BigDecimal pctComision = variante.getPctComision() != null
-                    ? variante.getPctComision()
-                    : BigDecimal.ZERO;
+                    ? variante.getPctComision() : BigDecimal.ZERO;
 
             BigDecimal precioVenta = calcularPrecioVenta(costo, pctMargen, pctComision);
             variante.setPrecioVenta(precioVenta);
-
             varianteRepository.save(variante);
 
             // Actualizar precio_compra del producto como referencia (último costo)
@@ -207,12 +202,10 @@ public class OrdenCompraService {
     private BigDecimal calcularPrecioVenta(
             BigDecimal costo, BigDecimal pctMargen, BigDecimal pctComision) {
 
-        // Paso 1: precio con margen
         BigDecimal divisorMargen = BigDecimal.ONE.subtract(
                 pctMargen.divide(BigDecimal.valueOf(100), 6, RoundingMode.HALF_UP));
         BigDecimal precioConMargen = costo.divide(divisorMargen, 4, RoundingMode.HALF_UP);
 
-        // Paso 2: precio con comisión
         if (pctComision.compareTo(BigDecimal.ZERO) > 0) {
             BigDecimal divisorComision = BigDecimal.ONE.subtract(
                     pctComision.divide(BigDecimal.valueOf(100), 6, RoundingMode.HALF_UP));
@@ -224,6 +217,25 @@ public class OrdenCompraService {
     // Para uso desde InventarioService
     public OrdenCompraResponse toResponsePublic(OrdenCompra o) {
         return toResponse(o);
+    }
+
+    // ─── FIX: usuario real en lugar de id hardcodeado ─────────────────────────
+    // Recibe idUsuario desde InventarioService (el usuario autenticado que hace la recepción)
+
+    void insertarMovimientoEntrada(DetalleOrdenCompra detalle, Integer idUsuario) {
+        entityManager.createNativeQuery("""
+                INSERT INTO movimiento_inventario
+                    (id_variante, cantidad_delta, tipo,
+                     id_detalle_orden_compra, id_usuario, nota)
+                VALUES
+                    (:idVariante, :cantidad, 'ENTRADA',
+                     :idDetalle, :idUsuario, 'Recepción de orden de compra')
+                """)
+                .setParameter("idVariante", detalle.getVariante().getId())
+                .setParameter("cantidad", detalle.getCantidad())
+                .setParameter("idDetalle", detalle.getId())
+                .setParameter("idUsuario", idUsuario)   // ← usuario real, no hardcodeado
+                .executeUpdate();
     }
 
     // ─── Helpers privados ─────────────────────────────────────────────────────
@@ -247,7 +259,6 @@ public class OrdenCompraService {
                 throw new IllegalArgumentException("El costo unitario no puede ser negativo");
             }
         }
-        // Validar distribución en modo lote
         if (Boolean.TRUE.equals(request.getEsLote())
                 && request.getPiezasLote() != null) {
             int sumaLineas = request.getDetalles().stream()
@@ -264,8 +275,7 @@ public class OrdenCompraService {
 
     private BigDecimal calcularCostoPorPieza(boolean esLote,
             OrdenCompraRequest request, BigDecimal flete) {
-        if (!esLote)
-            return null;
+        if (!esLote) return null;
         if (request.getCostoLote() == null || request.getPiezasLote() == null
                 || request.getPiezasLote() == 0) {
             throw new IllegalArgumentException(
@@ -302,21 +312,6 @@ public class OrdenCompraService {
                             .costoUnitario(costoLinea.setScale(2, RoundingMode.HALF_UP))
                             .build());
         }
-    }
-
-    void insertarMovimientoEntrada(DetalleOrdenCompra detalle) {
-        entityManager.createNativeQuery("""
-                INSERT INTO movimiento_inventario
-                    (id_variante, cantidad_delta, tipo,
-                     id_detalle_orden_compra, id_usuario, nota)
-                VALUES
-                    (:idVariante, :cantidad, 'ENTRADA',
-                     :idDetalle, 1, 'Recepción de orden de compra')
-                """)
-                .setParameter("idVariante", detalle.getVariante().getId())
-                .setParameter("cantidad", detalle.getCantidad())
-                .setParameter("idDetalle", detalle.getId())
-                .executeUpdate();
     }
 
     // ─── Mappers ──────────────────────────────────────────────────────────────
@@ -369,7 +364,7 @@ public class OrdenCompraService {
                 .idVariante(v.getId())
                 .sku(v.getSku())
                 .producto(v.getProducto().getNombre())
-                .atributos(atributos) // ← atributos flexibles
+                .atributos(atributos)
                 .cantidad(d.getCantidad())
                 .costoUnitario(d.getCostoUnitario())
                 .subtotal(subtotal)
