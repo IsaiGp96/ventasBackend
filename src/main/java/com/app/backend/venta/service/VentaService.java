@@ -46,6 +46,7 @@ public class VentaService {
         // private final ProductoRepository productoRepository;
         private final GastoRepository gastoRepository;
         private final CategoriaGastoRepository categoriaGastoRepository;
+        private static final Integer ID_CATEGORIA_COMISIONES = 106;
 
         // private static final Integer ID_CATEGORIA_COMISIONES = 106;
         // ─── Listar ───────────────────────────────────────────────────────────────
@@ -394,7 +395,7 @@ public class VentaService {
                 comisionRepository.save(comision);
 
                 // Cargar categoría "Comisiones sobre Ventas (Personal)" — id 106
-                CategoriaGasto categoria = categoriaGastoRepository.findById(106)
+                CategoriaGasto categoria = categoriaGastoRepository.findById(ID_CATEGORIA_COMISIONES)
                                 .orElseThrow(() -> new IllegalArgumentException(
                                                 "Categoría de comisiones no encontrada"));
 
