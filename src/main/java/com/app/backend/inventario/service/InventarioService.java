@@ -63,23 +63,7 @@ public class InventarioService {
                                         .orElse(0);
 
                         // Insertar movimiento — el trigger actualiza stock automáticamente
-                        entityManager.createNativeQuery("""
-                                        INSERT INTO movimiento_inventario
-                                            (id_variante, cantidad_delta, tipo,
-                                             id_detalle_orden_compra, id_usuario, nota, fecha)
-                                        VALUES
-                                            (:idVariante, :cantidad, 'ENTRADA',
-                                             :idDetalle, :idUsuario, :nota, :fecha)
-                                        """)
-                                        .setParameter("idVariante", idVariante)
-                                        .setParameter("cantidad", detalle.getCantidad())
-                                        .setParameter("idDetalle", detalle.getId())
-                                        .setParameter("idUsuario", idUsuario)
-                                        .setParameter("nota", request.getNota() != null
-                                                        ? request.getNota()
-                                                        : "Entrada por OC #" + orden.getId())
-                                        .setParameter("fecha", LocalDateTime.now())
-                                        .executeUpdate();
+                        ordenCompraService.insertarMovimientoEntrada(detalle, idUsuario);
 
                         // Flush para que el trigger actualice antes de leer
                         entityManager.flush();
